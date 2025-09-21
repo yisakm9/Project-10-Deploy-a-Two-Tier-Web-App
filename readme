@@ -1,0 +1,146 @@
+# Cloud Dictionary Full-Stack Serverless Application
+
+![Deploy Backend and Trigger Frontend](https://github.com/<YourGitHubUsername>/<YourRepoName>/actions/workflows/deploy-backend-dev.yml/badge.svg)![Destroy Full Stack Infrastructure (Manual)](https://github.com/<YourGitHubUsername>/<YourRepoName>/actions/workflows/destroy-full-stack.yml/badge.svg)
+
+A complete, full-stack, serverless web application that serves as a dictionary for cloud computing terms. This project is built entirely on AWS and demonstrates professional cloud engineering practices, including Infrastructure as Code (IaC), CI/CD automation, and modern frontend development.
+
+---
+
+## 🚀 Live Demo
+
+The live application is hosted on AWS Amplify. You can access it here:
+
+**[https://main.d3dgjbncpgsnqb.amplifyapp.com/](https://main.d3dgjbncpgsnqb.amplifyapp.com/)**
+
+## 🏛️ Architecture Overview
+
+This project follows a decoupled, serverless, three-tier architecture, ensuring scalability, security, and maintainability.
+
+**Data Flow:**
+`User` → `AWS Amplify (Vite/React)` → `Amazon API Gateway` → `AWS Lambda` → `Amazon DynamoDB`
+
+*   **Frontend Tier (AWS Amplify):** A modern Vite + React single-page application provides a clean and professional user interface for searching terms.
+*   **API Tier (Amazon API Gateway):** A serverless REST API provides a secure public endpoint for the frontend to query definitions.
+*   **Business Logic Tier (AWS Lambda):** A Python-based function contains the business logic to handle incoming API requests, validate them, and interact with the database.
+*   **Data Tier (Amazon DynamoDB):** A NoSQL database stores the dictionary terms and definitions, offering high performance and scalability.
+
+---
+
+## 🛠️ Technology Stack
+
+This project utilizes a modern, cloud-native technology stack.
+
+| Category      | Technology / Service                               | Purpose                                                     |
+|---------------|----------------------------------------------------|-------------------------------------------------------------|
+| **Frontend**  | [**Vite + React**](https://vitejs.dev/)            | High-performance, modern user interface development.        |
+| **Backend**   | [**AWS Lambda**](https://aws.amazon.com/lambda/)     | Serverless compute for business logic (Python).             |
+|               | [**Amazon API Gateway**](https://aws.amazon.com/api-gateway/) | Creating and managing the REST API endpoint.                |
+|               | [**Amazon DynamoDB**](https://aws.amazon.com/dynamodb/)    | Scalable NoSQL database for storing dictionary data.      |
+| **IaC**       | [**Terraform**](https://www.terraform.io/)         | Defining and managing all backend infrastructure as code.   |
+| **CI/CD**     | [**GitHub Actions**](https://github.com/features/actions) | Automating the deployment and destruction of infrastructure. |
+| **Hosting**   | [**AWS Amplify**](https://aws.amazon.com/amplify/)   | Hosting and CI/CD for the frontend application.             |
+
+---
+
+## 📁 Project Structure
+
+The repository is organized into distinct directories for backend, frontend, and data, promoting a clean separation of concerns.
+
+```
+.
+├── .github/workflows/         # CI/CD pipelines for deployment and destruction
+│   ├── deploy-backend-dev.yml
+│   └── destroy-full-stack.yml
+├── backend/                   # All backend infrastructure and code
+│   ├── environments/dev/      # Terraform configuration for the 'dev' environment
+│   ├── modules/               # Reusable Terraform modules for each AWS service
+│   └── src/fetch_definition/  # Python source code for the Lambda function
+├── data/                      # Data seeding scripts and templates
+│   ├── dictionary_data_template.json
+│   └── seed_database.sh
+├── frontend/                  # Vite + React frontend application
+│   ├── public/
+│   └── src/
+└── amplify.yml                # Build specification for AWS Amplify
+```
+
+---
+
+## 🚀 Getting Started
+
+Deploying this project is a two-phase process for the initial setup. Because the automated backend pipeline needs to update the frontend, the frontend application must be created first to establish its unique identity (App ID). After this one-time setup, all subsequent deployments are fully automated.
+
+### Prerequisites
+
+*   An AWS Account
+*   [AWS CLI](https://aws.amazon.com/cli/) configured on your local machine
+*   [Terraform](https://developer.hashicorp.com/terraform/downloads) installed
+*   [Node.js](https://nodejs.org/en) (v18 or later) installed
+*   A GitHub repository forked from this project
+
+### Phase 1: Initial Frontend Deployment (Manual)
+
+This step creates the Amplify application, making it discoverable by our backend pipeline.
+
+1.  **Connect to AWS Amplify:**
+    *   Navigate to the **AWS Amplify Console**.
+    *   Click **"Host web app"** and select **GitHub** as the provider.
+    *   Connect your forked repository and select the `main` branch.
+
+2.  **Configure Build Settings:**
+    *   Amplify will detect your `amplify.yml` file. Review the settings to ensure the `baseDirectory` is set to `frontend/dist`.
+    *   Amplify will prompt you to create a new IAM service role; allow it to do so.
+
+3.  **Save and Deploy:**
+    *   Review the configuration and click **"Save and deploy"**.
+    *   This first build may fail because the `VITE_API_URL` environment variable is not set yet. **This is expected and normal.** The goal is to create the application resource.
+
+### Phase 2: Automated Backend Deployment
+
+Now that the frontend app exists, we can set up and run the backend CI/CD pipeline.
+
+1.  **Configure AWS OIDC Trust & IAM Role:**
+    *   Follow the [AWS documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html) to create an OIDC identity provider in IAM for GitHub Actions.
+        *   **Provider URL:** `https://token.actions.githubusercontent.com`
+        *   **Audience:** `sts.amazonaws.com`
+    *   Create an IAM role for GitHub Actions that trusts this OIDC provider.
+    *   Attach the necessary permissions policies to this role for Terraform and for updating your new Amplify app.
+
+2.  **Create GitHub Secret:**
+    *   In your GitHub repository settings (**Settings > Secrets and variables > Actions**), create a new repository secret:
+        *   **Name:** `AWS_IAM_ROLE_ARN`
+        *   **Value:** Paste the ARN of the IAM role you just created.
+
+3.  **Trigger the Backend Workflow:**
+    *   Make a small change to a file in the `backend/` directory (e.g., add a comment).
+    *   Commit and push the change to the `main` branch.
+
+The `deploy-backend-dev.yml` workflow will now run, deploy all backend resources, seed the database, and trigger a final, successful frontend build. Your application is now live and fully automated.
+
+---
+
+## ⚙️ CI/CD Automation
+
+This project is fully automated with two primary GitHub Actions workflows.
+
+### 1. Automatic Deployment (`deploy-backend-dev.yml`)
+
+*   **Trigger:** Automatically runs on a `push` to the `main` branch for any changes in the `backend/` or `data/` directories.
+*   **Process:**
+    1.  Authenticates to AWS using OIDC.
+    2.  Runs `terraform apply` to deploy backend infrastructure.
+    3.  Runs the `seed_database.sh` script to populate DynamoDB.
+    4.  Dynamically looks up the Amplify App ID.
+    5.  Updates Amplify's `VITE_API_URL` environment variable with the new API Gateway URL.
+    6.  Triggers a new build and deployment for the Amplify frontend.
+
+### 2. Manual Destruction (`destroy-full-stack.yml`)
+
+*   **Trigger:** Must be run manually from the GitHub Actions UI.
+*   **Safety Features:** Requires the user to type `destroy-dev-environment` to prevent accidental deletion.
+*   **Process:**
+    1.  Verifies the confirmation phrase.
+    2.  Runs two parallel jobs to simultaneously delete the Amplify frontend and the Terraform backend.
+
+---
+

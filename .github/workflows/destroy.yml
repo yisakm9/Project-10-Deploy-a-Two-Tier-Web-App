@@ -1,0 +1,73 @@
+name: Destroy Full Stack Infrastructure (Manual)
+
+env:
+  CONFIRMATION_PHRASE: 'destroy-dev-environment'
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: 'To confirm, type exactly: destroy-dev-environment'
+        required: true
+        default: 'do-not-destroy'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  full_stack_destroy:
+    name: "Destroy Frontend and Backend"
+    runs-on: ubuntu-latest  
+
+    steps:
+      - name: 'Verify Destroy Confirmation'
+        run: |
+          if [ "${{ github.event.inputs.confirmation }}" != "${{ env.CONFIRMATION_PHRASE }}" ]; then
+            echo "❌ ERROR: Confirmation phrase did not match. Aborting workflow."
+            exit 1
+          else
+            echo "✅ Confirmation phrase matches. Proceeding with destroy operation."
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::456202167790:role/githubaction
+          aws-region: us-east-1
+
+      # --- NEW FRONTEND DESTROY STEPS ---
+      - name: Look up Amplify App ID
+        id: lookup_app_id
+        run: |
+          APP_ID=$(aws amplify list-apps | jq -r '.apps[] | select(.name == "Project-9-intermediate-level-Cloud-Dictionary-App") | .appId')
+          if [ -z "$APP_ID" ]; then
+            echo "Amplify App not found, skipping deletion."
+            echo "app_id=''" >> $GITHUB_OUTPUT
+          else
+            echo "Found Amplify App ID: $APP_ID"
+            echo "app_id=$APP_ID" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Destroy Amplify App
+        if: steps.lookup_app_id.outputs.app_id != ''
+        run: |
+          echo "Deleting Amplify App ID: ${{ steps.lookup_app_id.outputs.app_id }}"
+          aws amplify delete-app --app-id ${{ steps.lookup_app_id.outputs.app_id }}
+
+      # --- BACKEND DESTROY STEPS ---
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.13.1
+          
+      - name: Terraform Init
+        run: terraform init
+        working-directory: ./backend/environments/dev
+      
+      - name: Terraform Destroy
+        run: terraform destroy -auto-approve
+        working-directory: ./backend/environments/dev
