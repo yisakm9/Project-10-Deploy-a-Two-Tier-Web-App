@@ -26,8 +26,3 @@ variable "db_username" {
   default     = "masteruser"
 }
 
-variable "db_password" {
-  description = "The master password for the RDS database. Must be at least 8 characters."
-  type        = string
-  sensitive   = true
-}

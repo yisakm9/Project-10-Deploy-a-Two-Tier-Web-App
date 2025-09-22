@@ -1,4 +1,10 @@
 # backend/environments/dev/main.tf
+
+# Data source to get the list of availability zones in the current region.
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
 data "aws_secretsmanager_secret" "db_password_secret" {
   name = "two-tier-app/rds/master-password"
 }
@@ -12,10 +18,6 @@ locals {
   db_password = jsondecode(data.aws_secretsmanager_secret_version.db_password_version.secret_string)["password"]
 }
 
-# Data source to get the list of availability zones in the current region.
-data "aws_availability_zones" "available" {
-  state = "available"
-}
 
 # --- 1. Networking Layer ---
 module "vpc" {
