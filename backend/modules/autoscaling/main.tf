@@ -11,9 +11,9 @@ resource "aws_autoscaling_group" "main" {
   vpc_zone_identifier = var.vpc_zone_identifier
   target_group_arns   = var.target_group_arns
 
-  min_size         = 2
-  max_size         = 6
-  desired_capacity = 2
+  min_size         = 1
+  max_size         = 3
+  desired_capacity = 1
 
   health_check_type         = "ELB"
   health_check_grace_period = 300
