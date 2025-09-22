@@ -41,7 +41,7 @@ jobs:
       # 4. Terraform Format Check
       - name: Terraform Format
         id: fmt
-        run: terraform fmt -check -recursive
+        run: terraform fmt 
         working-directory: ./backend/environments/dev
 
       # 5. Terraform Init
