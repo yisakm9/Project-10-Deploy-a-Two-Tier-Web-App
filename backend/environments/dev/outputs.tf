@@ -19,10 +19,7 @@ output "data_subnet_ids" {
   description = "The IDs of the private data subnets."
   value       = module.vpc.data_subnet_ids
 }
-output "vpc_id" {
-  description = "The ID of the created VPC."
-  value       = module.vpc.vpc_id
-}
+
 
 output "application_url" {
   description = "The public URL of the application load balancer."
