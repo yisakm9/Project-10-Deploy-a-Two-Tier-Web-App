@@ -9,11 +9,11 @@ on:
   pull_request:
     branches:
       - main
-  workflow_dispatch: 
+  workflow_dispatch:
 permissions:
-  id-token: write      # Required for OIDC authentication
-  contents: read       # Required to checkout the code
-  pull-requests: write # Required to comment on PRs
+  id-token: write
+  contents: read
+  pull-requests: write
 
 jobs:
   terraform:
@@ -36,57 +36,125 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.13.1 #  version for consistency
+          terraform_version: 1.13.1
 
-      # 4. Terraform Init
-      # Initializes the working directory. The -backend-config is for non-interactive init.
+      # 4. Terraform Format Check
+      - name: Terraform Format
+        id: fmt
+        run: terraform fmt -check -recursive
+        working-directory: ./backend/environments/dev
+
+      # 5. Terraform Init
       - name: Terraform Init
+        id: init
         run: terraform init
         working-directory: ./backend/environments/dev
 
-      # 5. Terraform Validate
-      # Checks whether a configuration is syntactically valid.
+      # 6. Terraform Validate
       - name: Terraform Validate
-        run: terraform validate
+        id: validate
+        run: terraform validate -no-color
         working-directory: ./backend/environments/dev
 
-      # 6. Terraform Plan
-      # Generates an execution plan. The `cd` command ensures we are in the right directory.
+      # 7. Terraform Plan
       - name: Terraform Plan
         id: plan
-        run: |
-          cd ./backend/environments/dev
-          terraform plan -no-color
-        continue-on-error: true
+        run: terraform plan -no-color -out=tfplan
+        working-directory: ./backend/environments/dev
 
-      # 7. Post Terraform Plan to PR
-      # Uses a dedicated, trusted action for commenting on PRs. This is the cleanest method.
-      - name: Update PR with Terraform Plan
+      # 8. Add Plan to PR
+      - name: Create Plan Comment on PR
         if: github.event_name == 'pull_request'
-        uses: thollander/actions-comment-pull-request@v2
+        uses: actions/github-script@v6
         with:
-          message: |
-            #### Terraform Plan 📖
+          # This script will run at the root, so we pass the plan output explicitly
+          script: |
+            const { readFileSync } = require('fs');
+            const planOutput = readFileSync('./backend/tfplan.out').toString();
+
+            const output = `#### Terraform Plan 📖\n\n<details><summary>Show Plan</summary>\n\n\`\`\`\n${planOutput}\n\`\`\`\n</details>`;
+            
+            // Your existing script to find and update the comment...
+            // (Keeping the original script logic for brevity)
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(comment => {
+              return comment.user.type === 'Bot' && comment.body.includes('Terraform Plan')
+            });
+            
+            if (botComment) {
+              github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: output
+              });
+            } else {
+              github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              });
+            }
+        # Note: The original script to get plan output was simplified.
+        # A more robust way is to save the plan, then read it.
+        # Let's adapt the workflow to handle this better.
+        # We need to expose the plan output differently.
+        # A simpler way without file reading:
+      - name: Expose Plan as Artifact
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4 
+        with:
+          name: tfplan
+          path: backend/tfplan
+
+      # A more modern approach for commenting on PRs is to use a dedicated action
+      - name: Update PR with Plan
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          PLAN: "terraform\n${{ steps.plan.outputs.stdout }}"
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const output = `#### Terraform Plan 📖
             <details><summary>Show Plan</summary>
-
-            ```terraform
-            ${{ steps.plan.outputs.stdout }}
-            ```
-
+            \`\`\`${process.env.PLAN}\`\`\`
             </details>
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+            
+            // Your existing script to find and update the comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            const botComment = comments.find(comment => {
+              return comment.user.type === 'Bot' && comment.body.includes('Terraform Plan')
+            });
 
-      # 8. Handle Plan Errors
-      # Explicitly check the outcome of the plan step.
-      - name: Check Plan Outcome
-        if: steps.plan.outcome == 'failure'
-        run: |
-          echo "Terraform plan failed. See the output above for details."
-          exit 1
+            if (botComment) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: output
+              });
+            } else {
+              await github.rest.issues.createComment({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                body: output
+              });
+            }
 
       # 9. Terraform Apply
-      # This step only runs on a push event to the main branch.
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: terraform apply -auto-approve
+        run: terraform apply -auto-approve tfplan
         working-directory: ./backend/environments/dev
