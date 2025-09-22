@@ -8,7 +8,7 @@ data "aws_availability_zones" "available" {
 
 # Instantiate our custom VPC module
 module "vpc" {
-  source = "./modules/vpc"
+  source = "../../modules/vpc"
 
   project_name = var.project_name
   vpc_cidr     = "10.0.0.0/16"

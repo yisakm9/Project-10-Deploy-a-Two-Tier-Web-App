@@ -24,8 +24,6 @@ jobs:
       # 1. Checkout the repository to the runner
       - name: Checkout
         uses: actions/checkout@v4
-      - name: List Files in Workspace
-        run: ls -R  
 
       # 2. Configure AWS credentials using OIDC
       - name: Configure AWS Credentials
