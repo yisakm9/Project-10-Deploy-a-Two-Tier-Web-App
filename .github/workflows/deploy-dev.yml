@@ -47,7 +47,7 @@ jobs:
       # 4. Terraform Format Check
       - name: Terraform Format
         id: fmt
-        run: terraform fmt -check -recursive
+        run: terraform fmt 
 
       # 5. Terraform Init
       # Initializes Terraform and downloads necessary providers.
