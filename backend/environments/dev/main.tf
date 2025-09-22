@@ -1,6 +1,6 @@
 # backend/environments/dev/main.tf
 
-# Data source to get the list of availability zones in the current region.
+# Data  source to get the list of availability zones in the current region.
 data "aws_availability_zones" "available" {
   state = "available"
 }
