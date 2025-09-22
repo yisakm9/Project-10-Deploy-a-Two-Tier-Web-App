@@ -42,20 +42,20 @@ jobs:
       # Initializes the working directory. The -backend-config is for non-interactive init.
       - name: Terraform Init
         run: terraform init
-        working-directory: ./backend
+        working-directory: ./backend/environments/dev
 
       # 5. Terraform Validate
       # Checks whether a configuration is syntactically valid.
       - name: Terraform Validate
         run: terraform validate
-        working-directory: ./backend
+        working-directory: ./backend/environments/dev
 
       # 6. Terraform Plan
       # Generates an execution plan. The `cd` command ensures we are in the right directory.
       - name: Terraform Plan
         id: plan
         run: |
-          cd backend
+          cd ./backend/environments/dev
           terraform plan -no-color
         continue-on-error: true
 
@@ -89,4 +89,4 @@ jobs:
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve
-        working-directory: ./backend
+        working-directory: ./backend/environments/dev
