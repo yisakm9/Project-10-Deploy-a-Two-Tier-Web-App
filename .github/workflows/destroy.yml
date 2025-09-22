@@ -1,26 +1,34 @@
-name: Destroy Full Stack Infrastructure (Manual)
+# .github/workflows/destroy.yml
 
-env:
-  CONFIRMATION_PHRASE: 'destroy-dev-environment'
+name: 'Destroy Backend Infrastructure with Terraform'
 
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: 'To confirm, type exactly: destroy-dev-environment'
+        description: 'Type "destroy" to confirm you want to permanently destroy all resources.'
         required: true
-        default: 'do-not-destroy'
 
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  full_stack_destroy:
-    name: "Destroy Frontend and Backend"
-    runs-on: ubuntu-latest  
+  terraform-destroy:
+    name: 'Terraform Destroy'
+    runs-on: ubuntu-latest
+
+    # Define the confirmation phrase as an environment variable for easy management
+    env:
+      CONFIRMATION_PHRASE: 'destroy'
+
+    defaults:
+      run:
+        working-directory: ./backend/environments/dev
 
     steps:
+      # This step explicitly checks the user's input before proceeding.
+      # It will fail the entire workflow if the confirmation does not match.
       - name: 'Verify Destroy Confirmation'
         run: |
           if [ "${{ github.event.inputs.confirmation }}" != "${{ env.CONFIRMATION_PHRASE }}" ]; then
@@ -29,45 +37,27 @@ jobs:
           else
             echo "✅ Confirmation phrase matches. Proceeding with destroy operation."
           fi
+        # This step does not need a working-directory
+        working-directory: .
 
-      - name: Checkout
+      - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Configure AWS Credentials
+      - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::456202167790:role/githubaction
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: us-east-1
 
-      # --- NEW FRONTEND DESTROY STEPS ---
-      - name: Look up Amplify App ID
-        id: lookup_app_id
-        run: |
-          APP_ID=$(aws amplify list-apps | jq -r '.apps[] | select(.name == "Project-9-intermediate-level-Cloud-Dictionary-App") | .appId')
-          if [ -z "$APP_ID" ]; then
-            echo "Amplify App not found, skipping deletion."
-            echo "app_id=''" >> $GITHUB_OUTPUT
-          else
-            echo "Found Amplify App ID: $APP_ID"
-            echo "app_id=$APP_ID" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Destroy Amplify App
-        if: steps.lookup_app_id.outputs.app_id != ''
-        run: |
-          echo "Deleting Amplify App ID: ${{ steps.lookup_app_id.outputs.app_id }}"
-          aws amplify delete-app --app-id ${{ steps.lookup_app_id.outputs.app_id }}
-
-      # --- BACKEND DESTROY STEPS ---
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.13.1
-          
+          terraform_version: '~> 1.6.0'
+
       - name: Terraform Init
-        run: terraform init
-        working-directory: ./backend/environments/dev
-      
+        id: init
+        run: terraform init -upgrade
+
       - name: Terraform Destroy
+        id: destroy
         run: terraform destroy -auto-approve
-        working-directory: ./backend/environments/dev
