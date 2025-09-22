@@ -16,11 +16,6 @@ variable "vpc_id" {
   type        = string
 }
 
-variable "subnet_ids" {
-  description = "A list of private app subnet IDs to launch the instances in."
-  type        = list(string)
-}
-
 variable "iam_instance_profile_name" {
   description = "The name of the IAM instance profile to attach to the instances."
   type        = string
@@ -32,6 +27,8 @@ variable "alb_security_group_id" {
 }
 
 # --- Database Credentials for Application ---
+# These variables are passed into the user_data script to create the .env file.
+
 variable "db_endpoint" {
   description = "The endpoint of the RDS database."
   type        = string
@@ -45,7 +42,6 @@ variable "db_name" {
 variable "db_username" {
   description = "The username for the RDS database."
   type        = string
-  sensitive   = true
 }
 
 variable "db_password" {

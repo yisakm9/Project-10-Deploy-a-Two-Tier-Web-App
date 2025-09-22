@@ -1,13 +1,14 @@
 # backend/modules/ec2/main.tf
 
 # 1. EC2 Security Group
+# This acts as a firewall for our application instances.
 resource "aws_security_group" "ec2" {
   name        = "${var.project_name}-ec2-sg"
   description = "Allow traffic from ALB and allow all outbound"
   vpc_id      = var.vpc_id
 
   # Ingress Rule: Allow traffic on port 3000 (for our Node.js app)
-  # only from the Application Load Balancer.
+  # only from the Application Load Balancer's security group.
   ingress {
     from_port       = 3000
     to_port         = 3000
@@ -15,8 +16,9 @@ resource "aws_security_group" "ec2" {
     security_groups = [var.alb_security_group_id]
   }
 
-  # Egress Rule: Allow all outbound traffic so instances can reach the
-  # internet (via NAT Gateway) for updates and the RDS database.
+  # Egress Rule: Allow all outbound traffic. This allows our instances to
+  # communicate with the RDS database and reach the internet (via the NAT Gateway)
+  # for tasks like cloning the Git repo and installing packages.
   egress {
     from_port   = 0
     to_port     = 0
@@ -30,6 +32,7 @@ resource "aws_security_group" "ec2" {
 }
 
 # 2. Data Source to find the latest Amazon Linux 2 AMI
+# This is a best practice to avoid using outdated or hardcoded AMIs.
 data "aws_ami" "amazon_linux_2" {
   most_recent = true
   owners      = ["amazon"]
@@ -46,6 +49,8 @@ data "aws_ami" "amazon_linux_2" {
 }
 
 # 3. Launch Template
+# This defines the full configuration for any instance we want to launch.
+# The Auto Scaling Group will use this template as a blueprint.
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-"
   image_id      = data.aws_ami.amazon_linux_2.id
@@ -57,37 +62,42 @@ resource "aws_launch_template" "main" {
 
   vpc_security_group_ids = [aws_security_group.ec2.id]
 
-  # This user_data script automates the entire server setup.
+  # User Data script for automated bootstrapping on first launch.
+  # It is base64 encoded by Terraform.
   user_data = base64encode(<<-EOF
               #!/bin/bash
+              # Log everything to a file for easier debugging
+              exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+              
+              echo "Updating packages..."
               yum update -y
               yum install -y git
               
-              # Install Node.js 18.x
+              echo "Installing Node.js 18.x..."
               curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
               yum install -y nodejs
               
-              # Clone the application repository
+              echo "Cloning application repository..."
               git clone https://github.com/cloudacademy/nodejs-todo-app.git /home/ec2-user/app
               
-              # Create the .env file with database credentials
+              echo "Creating .env file with database credentials..."
               cat > /home/ec2-user/app/.env <<ENV
               DB_HOST=${var.db_endpoint}
               DB_PORT=3306
               DB_USER=${var.db_username}
-              DB_PASSWORD=${var.db_password}
+              DB_PASSWORD='${var.db_password}'
               DB_DATABASE=${var.db_name}
               APP_PORT=3000
               ENV
               
-              # Install application dependencies
+              echo "Installing application dependencies..."
               cd /home/ec2-user/app
               npm install
               
-              # Set ownership of the app directory
-              chown -R ec2-user:ec2-user /home/ec2-user/app
+              echo "Setting ownership of the app directory..."
+              chown -R ec2-user:ec-user /home/ec2-user/app
               
-              # Create a systemd service to run the app
+              echo "Creating systemd service file..."
               cat > /etc/systemd/system/todoapp.service <<SERVICE
               [Unit]
               Description=Node.js Todo App
@@ -104,31 +114,23 @@ resource "aws_launch_template" "main" {
               WantedBy=multi-user.target
               SERVICE
               
-              # Enable and start the service
+              echo "Enabling and starting the todoapp service..."
               systemctl daemon-reload
               systemctl enable todoapp.service
               systemctl start todoapp.service
+              echo "User data script finished."
               EOF
   )
 
+  # Ensures tags are applied to network interfaces for easier cost tracking.
+  tag_specifications {
+    resource_type = "network-interface"
+    tags = {
+      Name = "${var.project_name}-eni"
+    }
+  }
+
   tags = {
     Name = "${var.project_name}-launch-template"
-  }
-}
-
-# 4. EC2 Instances
-resource "aws_instance" "app_server" {
-  # Launch one instance in each of the private app subnets
-  count = length(var.subnet_ids)
-
-  launch_template {
-    id      = aws_launch_template.main.id
-    version = "$Latest"
-  }
-
-  subnet_id = var.subnet_ids[count.index]
-
-  tags = {
-    Name = "${var.project_name}-app-server-${count.index + 1}"
   }
 }
