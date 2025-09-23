@@ -81,6 +81,7 @@ resource "aws_launch_template" "main" {
               git clone https://github.com/cloudacademy/nodejs-todo-app.git /home/ec2-user/app
               
               echo "Creating .env file with database credentials..."
+              # Note the single quotes around the password to handle special characters
               cat > /home/ec2-user/app/.env <<ENV
               DB_HOST=${var.db_endpoint}
               DB_PORT=3306
@@ -115,17 +116,17 @@ resource "aws_launch_template" "main" {
               npm install
               
               echo "Setting ownership of the app directory..."
-              # CORRECTED THE TYPO HERE: from ec-user to ec2-user
+              # This command is critical for ensuring the 'ec2-user' can run the app
               chown -R ec2-user:ec2-user /home/ec2-user/app
 
               echo "Enabling and starting the todoapp service..."
-              # MOVED THESE COMMANDS TO THE END
               systemctl daemon-reload
               systemctl enable todoapp.service
               systemctl start todoapp.service
               echo "User data script finished successfully."
               EOF
   )
+
   # Ensures tags are applied to network interfaces for easier cost tracking.
   tag_specifications {
     resource_type = "network-interface"
