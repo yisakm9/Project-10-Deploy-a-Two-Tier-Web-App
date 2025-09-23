@@ -64,7 +64,7 @@ resource "aws_launch_template" "main" {
 
   # User Data script for automated bootstrapping on first launch.
   # It is base64 encoded by Terraform.
-  user_data = base64encode(<<-EOF
+ user_data = base64encode(<<-EOF
               #!/bin/bash
               # Log everything to a file for easier debugging
               exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
@@ -77,7 +77,7 @@ resource "aws_launch_template" "main" {
               curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
               yum install -y nodejs
               
-              echo "Cloning application repository..."
+              echo "Cloning application repository into /home/ec2-user/app..."
               git clone https://github.com/cloudacademy/nodejs-todo-app.git /home/ec2-user/app
               
               echo "Creating .env file with database credentials..."
@@ -90,21 +90,17 @@ resource "aws_launch_template" "main" {
               APP_PORT=3000
               ENV
               
-              echo "Installing application dependencies..."
-              cd /home/ec2-user/app
-              npm install
-              
-              echo "Setting ownership of the app directory..."
-              chown -R ec2-user:ec-user /home/ec2-user/app
-              
               echo "Creating systemd service file..."
               cat > /etc/systemd/system/todoapp.service <<SERVICE
               [Unit]
               Description=Node.js Todo App
-              After=network.target
-              
+              # This tells systemd to wait until the network is fully online
+              After=network-online.target
+              Wants=network-online.target
+
               [Service]
               User=ec2-user
+              Group=ec2-user
               WorkingDirectory=/home/ec2-user/app
               ExecStart=/usr/bin/node server.js
               Restart=always
@@ -114,14 +110,22 @@ resource "aws_launch_template" "main" {
               WantedBy=multi-user.target
               SERVICE
               
+              echo "Installing application dependencies..."
+              cd /home/ec2-user/app
+              npm install
+              
+              echo "Setting ownership of the app directory..."
+              # CORRECTED THE TYPO HERE: from ec-user to ec2-user
+              chown -R ec2-user:ec2-user /home/ec2-user/app
+
               echo "Enabling and starting the todoapp service..."
+              # MOVED THESE COMMANDS TO THE END
               systemctl daemon-reload
               systemctl enable todoapp.service
               systemctl start todoapp.service
-              echo "User data script finished."
+              echo "User data script finished successfully."
               EOF
   )
-
   # Ensures tags are applied to network interfaces for easier cost tracking.
   tag_specifications {
     resource_type = "network-interface"
