@@ -69,6 +69,7 @@ resource "aws_launch_template" "main" {
               #!/bin/bash
               exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
+              # Create a setup script that will be executed by a one-shot systemd service
               cat > /usr/local/bin/app-setup.sh << 'SETUP_SCRIPT'
               #!/bin/bash
               set -e
@@ -77,33 +78,33 @@ resource "aws_launch_template" "main" {
               dnf update -y
               dnf install -y git-all nodejs
 
-              echo "Cloning application repository into /home/ec2-user/app..."
-              # THIS IS THE FINAL FIX: Using a known-public repository URL
-              git clone https://github.com/AHEAD-THERIAULT/nodejs-todo-app.git /home/ec2-user/app
+              echo "Cloning official Docker sample application repository..."
+              # THIS IS THE FINAL FIX: Using the official Docker public sample app
+              git clone https://github.com/docker/getting-started-app.git /home/ec2-user/app
 
               echo "Creating .env file with database credentials..."
-              cat > /home/ec2-user/app/.env <<ENV
-              DB_HOST=${var.db_endpoint}
-              DB_PORT=3306
-              DB_USER=${var.db_username}
-              DB_PASSWORD='${var.db_password}'
-              DB_DATABASE=${var.db_name}
+              # Note the single quotes around the password to handle special characters
+              cat > /home/ec2-user/app/src/.env <<ENV
+              MYSQL_HOST=${var.db_endpoint}
+              MYSQL_USER=${var.db_username}
+              MYSQL_PASSWORD='${var.db_password}'
+              MYSQL_DB=${var.db_name}
               APP_PORT=3000
               ENV
               
-              echo "Installing application dependencies..."
-              cd /home/ec2-user/app
+              echo "Installing application dependencies from the /src directory..."
+              cd /home/ec2-user/app/src
               npm install
 
-              echo "Setting ownership of the app directory..."
+              echo "Setting ownership of the entire app directory..."
               chown -R ec2-user:ec2-user /home/ec2-user/app
               
               echo "Setup script finished successfully."
               SETUP_SCRIPT
 
-              # --- The rest of the script is unchanged ---
               chmod +x /usr/local/bin/app-setup.sh
 
+              # The setup service (runs once)
               cat > /etc/systemd/system/app-setup.service << SETUP_SERVICE
               [Unit]
               Description=Application Setup Script
@@ -118,6 +119,7 @@ resource "aws_launch_template" "main" {
               WantedBy=multi-user.target
               SETUP_SERVICE
 
+              # The main application service (restarts on failure)
               cat > /etc/systemd/system/todoapp.service << APP_SERVICE
               [Unit]
               Description=Node.js Todo App
@@ -126,7 +128,8 @@ resource "aws_launch_template" "main" {
               [Service]
               User=ec2-user
               Group=ec2-user
-              WorkingDirectory=/home/ec2-user/app
+              # Note: The working directory for this app is the /src sub-folder
+              WorkingDirectory=/home/ec2-user/app/src
               ExecStart=/usr/bin/node server.js
               Restart=always
               RestartSec=10
