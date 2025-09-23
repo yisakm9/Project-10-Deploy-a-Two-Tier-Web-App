@@ -82,16 +82,18 @@ resource "aws_launch_template" "main" {
               git clone https://github.com/docker/getting-started-app.git /home/ec2-user/app
 
               echo "Creating .env file with database credentials..."
-              cat > /home/ec2-user/app/src/.env <<ENV
+              # The Docker app reads the .env file from its root, not /src
+              cat > /home/ec2-user/app/.env <<ENV
               MYSQL_HOST=${var.db_endpoint}
               MYSQL_USER=${var.db_username}
               MYSQL_PASSWORD='${var.db_password}'
               MYSQL_DB=${var.db_name}
-              APP_PORT=3000
+              # The docker app uses PORT, not APP_PORT
+              PORT=3000
               ENV
               
-              echo "Installing application dependencies from the /src directory..."
-              cd /home/ec2-user/app/src
+              echo "Installing application dependencies..."
+              cd /home/ec2-user/app
               npm install
 
               echo "Setting ownership of the entire app directory..."
@@ -126,8 +128,9 @@ resource "aws_launch_template" "main" {
               [Service]
               User=ec2-user
               Group=ec2-user
-              WorkingDirectory=/home/ec2-user/app/src
-              # THIS IS THE FINAL FIX: Correct filename from server.js to app.js
+              # THIS IS THE FINAL FIX: The working directory is the root of the app
+              WorkingDirectory=/home/ec2-user/app
+              # AND the entrypoint is app.js
               ExecStart=/usr/bin/node app.js
               Restart=always
               RestartSec=10
