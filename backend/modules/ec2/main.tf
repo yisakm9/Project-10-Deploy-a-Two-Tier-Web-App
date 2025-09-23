@@ -33,13 +33,14 @@ resource "aws_security_group" "ec2" {
 
 # 2. Data Source to find the latest Amazon Linux 2 AMI
 # This is a best practice to avoid using outdated or hardcoded AMIs.
-data "aws_ami" "amazon_linux_2" {
+data "aws_ami" "amazon_linux_2023" {
   most_recent = true
   owners      = ["amazon"]
 
   filter {
     name   = "name"
-    values = ["amzn2-ami-hvm-*-x86_64-gp2"]
+    # This filter is updated to find the AL2023 AMI
+    values = ["al2023-ami-*-kernel-6.1-x86_64"]
   }
 
   filter {
@@ -53,7 +54,7 @@ data "aws_ami" "amazon_linux_2" {
 # The Auto Scaling Group will use this template as a blueprint.
 resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-"
-  image_id      = data.aws_ami.amazon_linux_2.id
+  image_id      = data.aws_ami.amazon_linux_2023.id 
   instance_type = var.instance_type
 
   iam_instance_profile {
