@@ -65,22 +65,17 @@ resource "aws_launch_template" "main" {
 
   # User Data script for automated bootstrapping on first launch.
   # It is base64 encoded by Terraform.
- user_data = base64encode(<<-EOF
+  user_data = base64encode(<<-EOF
               #!/bin/bash
               exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-              # Create a setup script that will be executed by a one-shot systemd service
               cat > /usr/local/bin/app-setup.sh << 'SETUP_SCRIPT'
               #!/bin/bash
-              set -e # Exit immediately if a command exits with a non-zero status.
+              set -e
 
-              echo "Updating packages..."
-              yum update -y
-              yum install -y git
-
-              echo "Installing Node.js 18.x..."
-              curl -fsSL https://rpm.nodesource.com/setup_18.x | bash -
-              yum install -y nodejs
+              echo "Updating packages and installing dependencies..."
+              dnf update -y
+              dnf install -y git-all nodejs
 
               echo "Cloning application repository into /home/ec2-user/app..."
               git clone https://github.com/cloudacademy/nodejs-todo-app.git /home/ec2-user/app
@@ -105,36 +100,27 @@ resource "aws_launch_template" "main" {
               echo "Setup script finished successfully."
               SETUP_SCRIPT
 
-              # Make the setup script executable
               chmod +x /usr/local/bin/app-setup.sh
 
-              # Create a one-shot systemd service to run our setup script
               cat > /etc/systemd/system/app-setup.service << SETUP_SERVICE
               [Unit]
               Description=Application Setup Script
-              # This service must run before our main application service
               Before=todoapp.service
-              # It needs the network to be online to clone git repo
               Requires=network-online.target
               After=network-online.target
-
               [Service]
               Type=oneshot
               ExecStart=/usr/local/bin/app-setup.sh
               RemainAfterExit=yes
-
               [Install]
               WantedBy=multi-user.target
               SETUP_SERVICE
 
-              # Create the main application service file
               cat > /etc/systemd/system/todoapp.service << APP_SERVICE
               [Unit]
               Description=Node.js Todo App
-              # This is the critical line: It will not start until app-setup.service has succeeded
               Requires=app-setup.service
               After=app-setup.service
-
               [Service]
               User=ec2-user
               Group=ec2-user
@@ -142,17 +128,14 @@ resource "aws_launch_template" "main" {
               ExecStart=/usr/bin/node server.js
               Restart=always
               RestartSec=10
-              
               [Install]
               WantedBy=multi-user.target
               APP_SERVICE
 
-              echo "Enabling services..."
+              echo "Enabling and starting services..."
               systemctl daemon-reload
               systemctl enable app-setup.service
               systemctl enable todoapp.service
-              
-              echo "Starting services..."
               systemctl start app-setup.service
               systemctl start todoapp.service
               
