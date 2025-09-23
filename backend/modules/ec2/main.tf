@@ -78,8 +78,8 @@ resource "aws_launch_template" "main" {
               dnf install -y git-all nodejs
 
               echo "Cloning application repository into /home/ec2-user/app..."
-              # THIS IS THE CRITICAL FIX: Disable interactive prompts for git
-              GIT_TERMINAL_PROMPT=0 git clone https://github.com/cloudacademy/nodejs-todo-app.git /home/ec2-user/app
+              # THIS IS THE FINAL FIX: Using a known-public repository URL
+              git clone https://github.com/AHEAD-THERIAULT/nodejs-todo-app.git /home/ec2-user/app
 
               echo "Creating .env file with database credentials..."
               cat > /home/ec2-user/app/.env <<ENV
@@ -101,9 +101,9 @@ resource "aws_launch_template" "main" {
               echo "Setup script finished successfully."
               SETUP_SCRIPT
 
+              # --- The rest of the script is unchanged ---
               chmod +x /usr/local/bin/app-setup.sh
 
-              # The setup service should NOT restart on failure. It runs once.
               cat > /etc/systemd/system/app-setup.service << SETUP_SERVICE
               [Unit]
               Description=Application Setup Script
@@ -118,7 +118,6 @@ resource "aws_launch_template" "main" {
               WantedBy=multi-user.target
               SETUP_SERVICE
 
-              # The main application service can and should restart on failure.
               cat > /etc/systemd/system/todoapp.service << APP_SERVICE
               [Unit]
               Description=Node.js Todo App
@@ -140,8 +139,6 @@ resource "aws_launch_template" "main" {
               systemctl enable app-setup.service
               systemctl enable todoapp.service
               systemctl start app-setup.service
-              # We don't need to explicitly start todoapp.service, 
-              # systemd will do it automatically after app-setup succeeds.
               
               echo "User data script finished."
               EOF
