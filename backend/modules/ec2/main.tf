@@ -79,11 +79,9 @@ resource "aws_launch_template" "main" {
               dnf install -y git-all nodejs
 
               echo "Cloning official Docker sample application repository..."
-              # THIS IS THE FINAL FIX: Using the official Docker public sample app
               git clone https://github.com/docker/getting-started-app.git /home/ec2-user/app
 
               echo "Creating .env file with database credentials..."
-              # Note the single quotes around the password to handle special characters
               cat > /home/ec2-user/app/src/.env <<ENV
               MYSQL_HOST=${var.db_endpoint}
               MYSQL_USER=${var.db_username}
@@ -128,9 +126,9 @@ resource "aws_launch_template" "main" {
               [Service]
               User=ec2-user
               Group=ec2-user
-              # Note: The working directory for this app is the /src sub-folder
               WorkingDirectory=/home/ec2-user/app/src
-              ExecStart=/usr/bin/node server.js
+              # THIS IS THE FINAL FIX: Correct filename from server.js to app.js
+              ExecStart=/usr/bin/node app.js
               Restart=always
               RestartSec=10
               [Install]
@@ -146,7 +144,6 @@ resource "aws_launch_template" "main" {
               echo "User data script finished."
               EOF
   )
-
   # Ensures tags are applied to network interfaces for easier cost tracking.
   tag_specifications {
     resource_type = "network-interface"
