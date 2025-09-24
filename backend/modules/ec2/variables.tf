@@ -50,3 +50,14 @@ variable "db_password" {
   type        = string
   sensitive   = true
 }
+
+
+variable "key_name" {
+  description = "The name of the EC2 key pair to associate with the instances."
+  type        = string
+}
+
+variable "aws_region" {
+  description = "The AWS region to deploy resources in."
+  type        = string
+}

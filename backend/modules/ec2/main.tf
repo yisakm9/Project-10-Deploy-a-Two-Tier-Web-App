@@ -1,5 +1,9 @@
 # backend/modules/ec2/main.tf
 
+data "aws_ip_ranges" "ec2_instance_connect" {
+  regions  = [var.aws_region] # Use the region variable
+  services = ["EC2_INSTANCE_CONNECT"]
+}
 # 1. EC2 Security Group
 # This acts as a firewall for our application instances.
 resource "aws_security_group" "ec2" {
@@ -16,6 +20,14 @@ resource "aws_security_group" "ec2" {
     security_groups = [var.alb_security_group_id]
   }
 
+# ADD THIS NEW INGRESS RULE FOR SSH
+  ingress {
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    # This securely allows access only from the EC2 Instance Connect service
+    cidr_blocks = data.aws_ip_ranges.ec2_instance_connect.cidr_blocks
+  }
   # Egress Rule: Allow all outbound traffic. This allows our instances to
   # communicate with the RDS database and reach the internet (via the NAT Gateway)
   # for tasks like cloning the Git repo and installing packages.
@@ -56,6 +68,7 @@ resource "aws_launch_template" "main" {
   name_prefix   = "${var.project_name}-"
   image_id      = data.aws_ami.amazon_linux_2023.id 
   instance_type = var.instance_type
+  key_name = var.key_name
 
   iam_instance_profile {
     name = var.iam_instance_profile_name
