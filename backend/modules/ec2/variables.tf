@@ -61,3 +61,8 @@ variable "aws_region" {
   description = "The AWS region to deploy resources in."
   type        = string
 }
+
+variable "eic_endpoint_security_group_id" {
+  description = "The security group ID of the EC2 Instance Connect Endpoint."
+  type        = string
+}

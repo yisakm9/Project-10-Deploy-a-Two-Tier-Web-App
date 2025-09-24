@@ -47,6 +47,15 @@ module "alb" {
   subnet_ids   = module.vpc.public_subnet_ids
 }
 
+module "eic_endpoint" {
+  source = "./modules/eic_endpoint"
+
+  project_name = var.project_name
+  vpc_id       = module.vpc.vpc_id
+  # Place the endpoint in the first private app subnet
+  subnet_id    = module.vpc.app_subnet_ids[0] 
+}
+
 # --- 4. Application Configuration Layer ---
 module "ec2" {
   source = "../../modules/ec2"
@@ -56,6 +65,7 @@ module "ec2" {
   iam_instance_profile_name = module.iam.instance_profile_name
   aws_region = var.aws_region
   key_name = aws_key_pair.app_key_pair.key_name
+  eic_endpoint_security_group_id = module.eic_endpoint.security_group_id
   
   # Connects to the ALB by allowing traffic from its security group
   alb_security_group_id     = module.alb.alb_security_group_id

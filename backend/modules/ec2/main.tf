@@ -28,6 +28,15 @@ resource "aws_security_group" "ec2" {
     # This securely allows access only from the EC2 Instance Connect service
     cidr_blocks = data.aws_ip_ranges.ec2_instance_connect.cidr_blocks
   }
+  # UPDATE THIS INGRESS RULE FOR SSH
+  ingress {
+    description     = "Allow SSH from EC2 Instance Connect Endpoint"
+    from_port       = 22
+    to_port         = 22
+    protocol        = "tcp"
+    # The source is now our private endpoint's security group
+    security_groups = [var.eic_endpoint_security_group_id] 
+  }
   # Egress Rule: Allow all outbound traffic. This allows our instances to
   # communicate with the RDS database and reach the internet (via the NAT Gateway)
   # for tasks like cloning the Git repo and installing packages.
