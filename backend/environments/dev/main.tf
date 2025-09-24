@@ -6,7 +6,7 @@ data "aws_availability_zones" "available" {
 }
 
 data "aws_secretsmanager_secret" "db_password_secret" {
-  name = "two-tier-app/rds/masterpassword"
+  name = "two-tier-app/rds/master-password"
 }
 
 data "aws_secretsmanager_secret_version" "db_password_version" {
