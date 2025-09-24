@@ -74,6 +74,8 @@ resource "aws_launch_template" "main" {
               #!/bin/bash
               set -e
 
+              # NOTE: The swap file commands have been removed as they are not needed for a t3.micro.
+
               echo "Updating packages and installing dependencies..."
               dnf update -y
               dnf install -y git-all nodejs
@@ -126,9 +128,7 @@ resource "aws_launch_template" "main" {
               [Service]
               User=ec2-user
               Group=ec2-user
-              # The working directory is the /src sub-folder where package.json is
               WorkingDirectory=/home/ec2-user/app/src
-              # THIS IS THE FINAL FIX: Use npm start, which correctly calls "node server.js"
               ExecStart=/usr/bin/npm start
               Restart=always
               RestartSec=10
