@@ -48,7 +48,7 @@ module "alb" {
 }
 
 module "eic_endpoint" {
-  source = "./modules/eic_endpoint"
+  source = "../../modules/eic_endpoint"
 
   project_name = var.project_name
   vpc_id       = module.vpc.vpc_id
