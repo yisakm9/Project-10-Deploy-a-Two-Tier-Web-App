@@ -74,8 +74,6 @@ resource "aws_launch_template" "main" {
               #!/bin/bash
               set -e
 
-              # NOTE: The swap file commands have been removed as they are not needed for a t3.micro.
-
               echo "Updating packages and installing dependencies..."
               dnf update -y
               dnf install -y git-all nodejs
@@ -129,7 +127,8 @@ resource "aws_launch_template" "main" {
               User=ec2-user
               Group=ec2-user
               WorkingDirectory=/home/ec2-user/app/src
-              ExecStart=/usr/bin/npm start
+              # THIS IS THE FINAL FIX: The entrypoint file is index.js, not server.js or app.js
+              ExecStart=/usr/bin/node index.js
               Restart=always
               RestartSec=10
               [Install]
