@@ -24,10 +24,6 @@ jobs:
     name: 'Terraform Plan & Apply'
     runs-on: ubuntu-latest
     
-    # This 'outputs' block makes the Terraform outputs available to downstream jobs
-    outputs:
-      tf_outputs: ${{ steps.get_outputs.outputs.apply_outputs }}
-
     defaults:
       run:
         working-directory: ./backend/environments/dev
@@ -103,14 +99,18 @@ jobs:
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
         run: terraform apply -auto-approve tfplan
 
-      # This step makes the Terraform outputs from the apply step available to other jobs in the workflow.
-      - name: Get Terraform Outputs
-        id: get_outputs
+      # This step saves the Terraform outputs to a file for the next job.
+      - name: Save Terraform Outputs to Artifact
         if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-        run: |
-          output=$(terraform output -json)
-          echo "apply_outputs=$output" >> $GITHUB_OUTPUT
-        
+        run: terraform output -json > outputs.json
+      
+      - name: Upload Terraform Outputs Artifact
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tf-outputs-artifact
+          path: ./backend/environments/dev/outputs.json
+
   # ===================================================================
   # JOB 2: VERIFY THE LIVE INSTANCE CONFIGURATION
   # ===================================================================
@@ -123,6 +123,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Download Terraform Outputs Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tf-outputs-artifact
+          path: . # Download to the root of the workspace
+
       - name: Configure AWS Credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -137,10 +143,9 @@ jobs:
       - name: 'Get Target Instance ID for Verification'
         id: get_instance
         run: |
-          # Parse the JSON output from the 'terraform' job to get the ASG name
-          ASG_NAME=$(echo '${{ needs.terraform.outputs.tf_outputs }}' | jq -r '.autoscaling_group_name.value')
+          ASG_NAME=$(jq -r '.autoscaling_group_name.value' outputs.json)
           if [ "$ASG_NAME" = "null" ]; then
-            echo "::error::Could not parse Auto Scaling Group name from Terraform outputs."
+            echo "::error::Could not parse Auto Scaling Group name from outputs.json."
             exit 1
           fi
           echo "Target Auto Scaling Group: $ASG_NAME"
