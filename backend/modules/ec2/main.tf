@@ -87,9 +87,11 @@ resource "aws_launch_template" "main" {
 
   # User Data script for automated bootstrapping on first launch.
   # It is base64 encoded by Terraform.
- user_data = base64encode(<<-EOF
+   user_data = base64encode(<<-EOF
               #!/bin/bash
               exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
+
+              set -e
 
               echo "--- SINGLE SCRIPT BOOTSTRAP STARTED ---"
 
@@ -126,8 +128,8 @@ resource "aws_launch_template" "main" {
               cat > /etc/systemd/system/todoapp.service << APP_SERVICE
               [Unit]
               Description=Node.js Todo App
-              # Wait for the network to be ready
-              After=network.target
+              # Wait for the network to be ready and all setup to be complete
+              After=network.target cloud-final.service
 
               [Service]
               User=ec2-user
