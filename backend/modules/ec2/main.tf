@@ -87,23 +87,27 @@ resource "aws_launch_template" "main" {
 
   # User Data script for automated bootstrapping on first launch.
   # It is base64 encoded by Terraform.
-  user_data = base64encode(<<-EOF
+    user_data = base64encode(<<-EOF
               #!/bin/bash
               exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-              # Create a setup script that will be executed by a one-shot systemd service
+              echo "--- Main User Data Script Started ---"
+
+              echo "STEP 1: Installing dependencies..."
+              dnf update -y
+              dnf install -y git-all nodejs
+
+              echo "STEP 2: Cloning application repository as root user..."
+              git clone https://github.com/docker/getting-started-app.git /home/ec2-user/app
+              
+              echo "STEP 3: Creating the setup script for systemd to run..."
               cat > /usr/local/bin/app-setup.sh << 'SETUP_SCRIPT'
               #!/bin/bash
               set -e
 
-              echo "Updating packages and installing dependencies..."
-              dnf update -y
-              dnf install -y git-all nodejs
-
-              echo "Cloning official Docker sample application repository..."
-              git clone https://github.com/docker/getting-started-app.git /home/ec2-user/app
-
-              echo "Creating .env file with database credentials..."
+              echo "--- App Setup Script Started ---"
+              
+              echo "Creating .env file in /home/ec2-user/app/src/ ..."
               cat > /home/ec2-user/app/src/.env <<ENV
               MYSQL_HOST=${var.db_endpoint}
               MYSQL_USER=${var.db_username}
@@ -112,14 +116,14 @@ resource "aws_launch_template" "main" {
               APP_PORT=3000
               ENV
               
-              echo "Installing application dependencies from the /src directory..."
+              echo "Installing application dependencies in /home/ec2-user/app/src/ ..."
               cd /home/ec2-user/app/src
               npm install
 
-              echo "Setting ownership of the entire app directory..."
+              echo "Setting ownership of the entire /home/ec2-user/app directory..."
               chown -R ec2-user:ec2-user /home/ec2-user/app
               
-              echo "Setup script finished successfully."
+              echo "--- App Setup Script Finished Successfully ---"
               SETUP_SCRIPT
 
               chmod +x /usr/local/bin/app-setup.sh
@@ -149,21 +153,26 @@ resource "aws_launch_template" "main" {
               User=ec2-user
               Group=ec2-user
               WorkingDirectory=/home/ec2-user/app/src
-              # THIS IS THE FINAL FIX: The entrypoint file is index.js, not server.js or app.js
-              ExecStart=/usr/bin/node index.js
+              
+              # THIS IS THE FINAL FIX:
+              # Explicitly source the .env file within a bash shell before starting the node process.
+              # This ensures the MYSQL_HOST and other variables are loaded into the environment.
+              ExecStart=/bin/bash -c 'source .env && /usr/bin/node index.js'
+              
               Restart=always
               RestartSec=10
+              
               [Install]
               WantedBy=multi-user.target
               APP_SERVICE
 
-              echo "Enabling and starting services..."
+              echo "STEP 4: Enabling and starting systemd services..."
               systemctl daemon-reload
               systemctl enable app-setup.service
               systemctl enable todoapp.service
               systemctl start app-setup.service
               
-              echo "User data script finished."
+              echo "--- Main User Data Script Finished ---"
               EOF
   )
   # Ensures tags are applied to network interfaces for easier cost tracking.
