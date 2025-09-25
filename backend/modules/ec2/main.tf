@@ -87,44 +87,42 @@ resource "aws_launch_template" "main" {
 
   # User Data script for automated bootstrapping on first launch.
   # It is base64 encoded by Terraform.
-    user_data = base64encode(<<-EOF
+   user_data = base64encode(<<-EOF
               #!/bin/bash
               exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-              echo "--- Main User Data Script Started ---"
-
-              echo "STEP 1: Installing dependencies..."
-              dnf update -y
-              dnf install -y git-all nodejs
-
-              echo "STEP 2: Cloning application repository as root user..."
-              git clone https://github.com/docker/getting-started-app.git /home/ec2-user/app
-              
-              echo "STEP 3: Creating the setup script for systemd to run..."
+              # Create a setup script that will be executed by a one-shot systemd service
               cat > /usr/local/bin/app-setup.sh << 'SETUP_SCRIPT'
               #!/bin/bash
               set -e
 
-              echo "--- App Setup Script Started ---"
-              
-              echo "Creating .env file in /home/ec2-user/app/src/ ..."
+              echo "Updating packages and installing dependencies..."
+              dnf update -y
+              dnf install -y git-all nodejs
+
+              echo "Cloning official Docker sample application repository..."
+              git clone https://github.com/docker/getting-started-app.git /home/ec2-user/app
+
+              echo "Creating .env file with CORRECT database credentials..."
               cat > /home/ec2-user/app/src/.env <<ENV
-              MYSQL_HOST=${var.db_endpoint}
+              # THIS IS THE FINAL FIX (1/2): The port must not be in the host string.
+              # The Terraform output 'db_endpoint' includes the port, so we must strip it out.
+              MYSQL_HOST=$(echo "${var.db_endpoint}" | cut -d: -f1)
               MYSQL_USER=${var.db_username}
               MYSQL_PASSWORD='${var.db_password}'
               MYSQL_DB=${var.db_name}
-              # This is the final fix: The application expects PORT, not APP_PORT.
+              # THIS IS THE FINAL FIX (2/2): The application expects PORT, not APP_PORT.
               PORT=3000
               ENV
               
-              echo "Installing application dependencies in /home/ec2-user/app/src/ ..."
+              echo "Installing application dependencies from the /src directory..."
               cd /home/ec2-user/app/src
               npm install
 
-              echo "Setting ownership of the entire /home/ec2-user/app directory..."
+              echo "Setting ownership of the entire app directory..."
               chown -R ec2-user:ec2-user /home/ec2-user/app
               
-              echo "--- App Setup Script Finished Successfully ---"
+              echo "Setup script finished successfully."
               SETUP_SCRIPT
 
               chmod +x /usr/local/bin/app-setup.sh
@@ -161,13 +159,13 @@ resource "aws_launch_template" "main" {
               WantedBy=multi-user.target
               APP_SERVICE
 
-              echo "STEP 4: Enabling and starting systemd services..."
+              echo "Enabling and starting services..."
               systemctl daemon-reload
               systemctl enable app-setup.service
               systemctl enable todoapp.service
               systemctl start app-setup.service
               
-              echo "--- Main User Data Script Finished ---"
+              echo "User data script finished."
               EOF
   )
   # Ensures tags are applied to network interfaces for easier cost tracking.
