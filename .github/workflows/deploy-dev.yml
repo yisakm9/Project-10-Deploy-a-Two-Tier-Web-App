@@ -161,6 +161,8 @@ jobs:
           echo "Found healthy target instance for verification: $INSTANCE_ID"
           echo "instance_id=$INSTANCE_ID" >> $GITHUB_OUTPUT
 
+      # In the 'verify-instance' job...
+
       - name: 'Run Verification Script on Instance via SSM'
         id: run_verification
         run: |
@@ -168,31 +170,41 @@ jobs:
           
           echo "Executing verification script on instance $INSTANCE_ID..."
           
-          # Define the shell commands to run on the remote instance
-          COMMANDS=$(cat <<'EOF'
-          echo "--- Verifying .env file ---"
-          # Check for existence and permissions
-          ls -la /home/ec2-user/app/src/.env
-
-          echo "--- Verifying todoapp.service status ---"
-          # Check that the service is active and running
-          systemctl is-active todoapp.service
+          # THIS IS THE FIX:
+          # Define the parameters as a well-formed, multiline JSON string.
+          # The AWS CLI will parse this correctly.
+          PARAMETERS=$(cat <<EOF
+          {
+            "commands": [
+              "echo '--- Verifying .env file ---'",
+              "ls -la /home/ec2-user/app/src/.env",
+              "echo '--- Verifying todoapp.service status ---'",
+              "systemctl is-active todoapp.service"
+            ]
+          }
           EOF
           )
 
-          # Send the commands using SSM Run Command
-          COMMAND_ID=$(aws ssm send-command --instance-ids "$INSTANCE_ID" --document-name "AWS-RunShellScript" --parameters "commands=[$COMMANDS]" --region me-central-1 | jq -r '.Command.CommandId')
+          # Send the command with the properly formatted JSON parameters
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids "$INSTANCE_ID" \
+            --document-name "AWS-RunShellScript" \
+            --parameters "$PARAMETERS" \
+            --region me-central-1 | jq -r '.Command.CommandId')
           
+          if [ -z "$COMMAND_ID" ]; then
+            echo "::error::Failed to send SSM command. COMMAND_ID is empty."
+            exit 1
+          fi
+
           echo "SSM Command sent. Command ID: $COMMAND_ID. Waiting for completion..."
           sleep 20 
 
-          # Wait for the command to finish and get the output
           aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --region me-central-1
           
           echo "--- Verification Script Output from Instance ---"
           aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --region me-central-1 | jq -r '.StandardOutputContent'
           
-          # Check the final status of the command
           STATUS=$(aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id "$INSTANCE_ID" --region me-central-1 | jq -r '.Status')
           if [ "$STATUS" != "Success" ]; then
             echo "::error::Verification script failed on the instance. See logs above for details."
