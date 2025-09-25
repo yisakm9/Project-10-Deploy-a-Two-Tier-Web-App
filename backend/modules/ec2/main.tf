@@ -113,7 +113,8 @@ resource "aws_launch_template" "main" {
               MYSQL_USER=${var.db_username}
               MYSQL_PASSWORD='${var.db_password}'
               MYSQL_DB=${var.db_name}
-              APP_PORT=3000
+              # This is the final fix: The application expects PORT, not APP_PORT.
+              PORT=3000
               ENV
               
               echo "Installing application dependencies in /home/ec2-user/app/src/ ..."
@@ -153,15 +154,9 @@ resource "aws_launch_template" "main" {
               User=ec2-user
               Group=ec2-user
               WorkingDirectory=/home/ec2-user/app/src
-              
-              # THIS IS THE FINAL FIX:
-              # Explicitly source the .env file within a bash shell before starting the node process.
-              # This ensures the MYSQL_HOST and other variables are loaded into the environment.
-              ExecStart=/bin/bash -c 'source .env && /usr/bin/node index.js'
-              
+              ExecStart=/usr/bin/node index.js
               Restart=always
               RestartSec=10
-              
               [Install]
               WantedBy=multi-user.target
               APP_SERVICE
