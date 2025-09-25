@@ -25,3 +25,7 @@ output "application_url" {
   description = "The public URL of the application load balancer."
   value       = "http://${module.alb.alb_dns_name}"
 }
+output "autoscaling_group_name" {
+  description = "The name of the application's Auto Scaling Group."
+  value       = module.autoscaling.autoscaling_group_name
+}
