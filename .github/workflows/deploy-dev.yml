@@ -171,12 +171,12 @@ jobs:
           
           echo "Executing verification script on instance $INSTANCE_ID..."
           
-          # This parameters block is now correct
+          # This is the final fix: The path to the .env file is corrected.
           PARAMETERS=$(cat <<EOF
           {
             "commands": [
               "echo '--- Verifying .env file ---'",
-              "ls -la /home/ec2-user/app/src/.env",
+              "ls -la /home/ec2-user/app/.env",
               "echo '--- Verifying todoapp.service status ---'",
               "systemctl is-active todoapp.service"
             ]
