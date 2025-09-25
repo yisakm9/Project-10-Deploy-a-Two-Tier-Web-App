@@ -87,7 +87,7 @@ resource "aws_launch_template" "main" {
 
   # User Data script for automated bootstrapping on first launch.
   # It is base64 encoded by Terraform.
-    user_data = base6encode(<<-EOF
+ user_data = base64encode(<<-EOF
               #!/bin/bash
               exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
