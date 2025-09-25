@@ -56,7 +56,7 @@ module "eic_endpoint" {
   subnet_id    = module.vpc.app_subnet_ids[0] 
 }
 
-# --- 4. Application Configuration Layer ---
+# 4. Application Configuration Layer 
 module "ec2" {
   source = "../../modules/ec2"
 
