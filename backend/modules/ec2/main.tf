@@ -87,23 +87,23 @@ resource "aws_launch_template" "main" {
 
   # User Data script for automated bootstrapping on first launch.
   # It is base64 encoded by Terraform.
-    user_data = base64encode(<<-EOF
+    user_data = base6encode(<<-EOF
               #!/bin/bash
               exec > >(tee /var/log/user-data.log|logger -t user-data -s 2>/dev/console) 2>&1
 
-              echo "--- Main User Data Script Started ---"
+              echo "--- SINGLE SCRIPT BOOTSTRAP STARTED ---"
 
-              echo "STEP 1: Installing dependencies..."
+              # STEP 1: Install Dependencies
+              echo "Installing dependencies..."
               dnf update -y
               dnf install -y git-all nodejs
 
-              echo "STEP 2: Cloning a reliable Node.js/MySQL sample app..."
-              # THIS IS THE FINAL FIX: A new, more reliable sample application
+              # STEP 2: Clone Repository
+              echo "Cloning application repository..."
               git clone https://github.com/datacharmer/node-mysql-crud-app.git /home/ec2-user/app
-              
-              echo "STEP 3: Creating the .env file for the new application..."
-              # This new application uses a different config file name: .env
-              # Note: It also uses different variable names.
+
+              # STEP 3: Create .env File
+              echo "Creating .env file..."
               cat > /home/ec2-user/app/.env <<ENV
               DB_HOST=${var.db_endpoint}
               DB_USER=${var.db_username}
@@ -112,61 +112,41 @@ resource "aws_launch_template" "main" {
               PORT=3000
               ENV
 
-              echo "STEP 4: Creating the setup script for systemd to run..."
-              cat > /usr/local/bin/app-setup.sh << 'SETUP_SCRIPT'
-              #!/bin/bash
-              set -e
-
-              echo "--- App Setup Script Started ---"
-              
-              echo "Installing application dependencies..."
+              # STEP 4: Install Node Modules
+              echo "Installing npm dependencies..."
               cd /home/ec2-user/app
               npm install
 
-              echo "Setting ownership of the entire app directory..."
+              # STEP 5: Set Permissions
+              echo "Setting final ownership..."
               chown -R ec2-user:ec2-user /home/ec2-user/app
-              
-              echo "--- App Setup Script Finished Successfully ---"
-              SETUP_SCRIPT
 
-              chmod +x /usr/local/bin/app-setup.sh
-
-              # --- The systemd service definitions are now simplified and corrected ---
-              cat > /etc/systemd/system/app-setup.service << SETUP_SERVICE
-              [Unit]
-              Description=Application Setup Script
-              [Service]
-              Type=oneshot
-              ExecStart=/usr/local/bin/app-setup.sh
-              RemainAfterExit=yes
-              [Install]
-              WantedBy=multi-user.target
-              SETUP_SERVICE
-
+              # STEP 6: Create and Start the Service
+              echo "Creating systemd service..."
               cat > /etc/systemd/system/todoapp.service << APP_SERVICE
               [Unit]
               Description=Node.js Todo App
-              Requires=app-setup.service
-              After=app-setup.service
+              # Wait for the network to be ready
+              After=network.target
+
               [Service]
               User=ec2-user
               Group=ec2-user
               WorkingDirectory=/home/ec2-user/app
-              # This app's entrypoint is server.js
               ExecStart=/usr/bin/node server.js
               Restart=always
               RestartSec=10
+              
               [Install]
               WantedBy=multi-user.target
               APP_SERVICE
-
-              echo "STEP 5: Enabling and starting systemd services..."
-              systemctl daemon-reload
-              systemctl enable app-setup.service
-              systemctl enable todoapp.service
-              systemctl start app-setup.service
               
-              echo "--- Main User Data Script Finished ---"
+              echo "Enabling and starting the service..."
+              systemctl daemon-reload
+              systemctl enable todoapp.service
+              systemctl start todoapp.service
+
+              echo "--- BOOTSTRAP SCRIPT FINISHED ---"
               EOF
   )
   # Ensures tags are applied to network interfaces for easier cost tracking.
