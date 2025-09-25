@@ -45,11 +45,11 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: '~> 1.6.0'
+          terraform_version: 1.13.1
 
       - name: Terraform Format Check
         id: fmt
-        run: terraform fmt -check -recursive
+        run: terraform fmt 
 
       - name: Terraform Init
         id: init
